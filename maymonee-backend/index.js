@@ -26,7 +26,7 @@ const pool = new Pool({
 });
 
 // --- JWT SECRET ---
-const JWT_SECRET = 'rahasia_maymonee_super_secure'; 
+const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_local'
 
 // --- HELPER: Verify Token Middleware ---
 const authenticateToken = (req, res, next) => {
