@@ -26,7 +26,7 @@ const pool = new Pool({
 });
 
 // --- JWT SECRET ---
-const JWT_SECRET = process.env.JWT_SECRET || 'fallback_secret_local'
+const JWT_SECRET = process.env.JWT_SECRET
 
 // --- HELPER: Verify Token Middleware ---
 const authenticateToken = (req, res, next) => {

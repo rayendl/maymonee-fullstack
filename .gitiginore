@@ -1,0 +1,7 @@
+echo node_modules/ > .gitignore
+echo maymonee-backend/node_modules/ >> .gitignore
+echo maymonee-app/node_modules/ >> .gitignore
+echo maymonee-app/dist/ >> .gitignore
+echo maymonee-backend/.env >> .gitignore
+echo "*.log" >> .gitignore
+echo ".DS_Store" >> .gitignore
