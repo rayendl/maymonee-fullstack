@@ -18,11 +18,11 @@ app.use(express.json());
 const pool = new Pool({
   // Gunakan Environment Variables yang disediakan oleh layanan hosting (Vercel, Heroku, dll.)
   // Fallback ke nilai lokal hanya jika ENV kosong
-  user: process.env.PGUSER || 'postgres',
-  host: process.env.PGHOST || 'localhost',
-  database: process.env.PGDATABASE || 'maymonee_db',
-  password: process.env.PGPASSWORD || 'password_anda', // <--- HARAP GANTI 'password_anda'
-  port: process.env.PGPORT || 5432,
+  user: process.env.PGUSER,
+  host: process.env.PGHOST,
+  database: process.env.PGDATABASE,
+  password: process.env.PGPASSWORD,
+  port: process.env.PGPORT,
 });
 
 // --- JWT SECRET ---
