@@ -1,0 +1,3 @@
+/* /index.html 200
+```
+(Penjelasan: Baris ini berarti "untuk semua jalur (*), kirimkan file `/index.html` dengan status OK (`200`).")
