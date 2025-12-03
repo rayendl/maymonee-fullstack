@@ -9,24 +9,51 @@ const app = express();
 // Gunakan port dari environment variable (untuk hosting) atau fallback ke 5000 (untuk lokal)
 const PORT = process.env.PORT || 5000; 
 
-// --- MIDDLEWARE ---
-app.use(cors()); // Agar Frontend (port 5173) boleh akses Backend (port 5000)
-app.use(express.json());
+// --- MIDDLEWARE (STRUKTUR CORS YANG DIPERBAIKI) ---
+
+// 1. Definisikan Domain yang Diizinkan secara eksplisit
+const allowedOrigins = [
+  'http://localhost:5173', 
+  // GANTI INI DENGAN URL PUBLIK NETLIFY ANDA
+  'https://maymonee.netlify.app', 
+  // Domain Backend Railway Anda (penting untuk server-to-server)
+  `https://${process.env.RAILWAY_STATIC_DOMAIN}`, 
+  'https://handsome-motivation-production-1553.up.railway.app'
+];
+
+app.use(cors({
+  origin: (origin, callback) => {
+    // Izinkan permintaan tanpa 'origin' (seperti Postman atau server-to-server)
+    if (!origin) return callback(null, true); 
+    
+    // Periksa apakah domain origin ada dalam daftar yang diizinkan
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Metode HTTP yang diizinkan
+  credentials: true, // WAJIB untuk mengizinkan transfer header Autentikasi (JWT)
+}));
+
+app.use(express.json()); // Pastikan ini tetap ada di bawah CORS
 
 // --- DATABASE CONNECTION ---
 // Ganti password dan user sesuai settingan PostgreSQL di komputer Anda
 const pool = new Pool({
   // Gunakan Environment Variables yang disediakan oleh layanan hosting (Vercel, Heroku, dll.)
   // Fallback ke nilai lokal hanya jika ENV kosong
-  user: process.env.PGUSER,
-  host: process.env.PGHOST,
-  database: process.env.PGDATABASE,
-  password: process.env.PGPASSWORD,
-  port: process.env.PGPORT,
+  user: process.env.PGUSER || 'postgres', // User
+  host: process.env.PGHOST || 'localhost', // Host/Domain
+  database: process.env.PGDATABASE || 'maymonee_db', // Nama Database
+  password: process.env.PGPASSWORD || 'ryanunpad31', // Password
+  port: process.env.PGPORT || 5432, // Port
 });
 
 // --- JWT SECRET ---
-const JWT_SECRET = process.env.JWT_SECRET
+// Optimal: Gunakan ENV untuk JWT_SECRET
+const JWT_SECRET = process.env.JWT_SECRET || 'rahasia_maymonee_super_secure'; 
 
 // --- HELPER: Verify Token Middleware ---
 const authenticateToken = (req, res, next) => {
@@ -63,6 +90,12 @@ app.post('/api/auth/register', async (req, res) => {
     const newUser = await pool.query(
       'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING id, name, email',
       [name, email, hashedPassword]
+    );
+
+    // Tambahkan 1 akun default setelah register (untuk meminimalisir error frontend blank)
+    await pool.query(
+      "INSERT INTO accounts (user_id, name, type, balance) VALUES ($1, 'Dompet Utama', 'Cash', 0)",
+      [newUser.rows[0].id]
     );
 
     // Generate Token
@@ -103,7 +136,6 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // 3. DASHBOARD DATA (GET ALL DATA)
-// Ini endpoint 'borongan' agar frontend tidak perlu fetch 5x
 app.get('/api/dashboard', authenticateToken, async (req, res) => {
   try {
     const userId = req.user.id;
@@ -119,9 +151,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     ]);
 
     // Construct response structure sesuai ekspektasi React
-    // Note: Budgets & Categories sementara kita hardcode defaultnya dulu jika belum ada tabel khusus
-    // agar app tidak crash. Nanti bisa dikembangkan lagi.
-    
     const responseData = {
       accounts: accounts.rows,
       transactions: transactions.rows,
@@ -147,18 +176,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
   }
 });
 
-// --- HELPER ROUTES (UNTUK MEMBUAT DATA AWAL) ---
-// Jalankan ini sekali lewat Postman jika ingin akun default
-app.post('/api/setup-default', authenticateToken, async (req, res) => {
-    try {
-        const userId = req.user.id;
-        await pool.query("INSERT INTO accounts (user_id, name, type, balance) VALUES ($1, 'Dompet Tunai', 'Cash', 0)", [userId]);
-        await pool.query("INSERT INTO accounts (user_id, name, type, balance) VALUES ($1, 'Bank Utama', 'Bank', 0)", [userId]);
-        res.json({ message: "Default accounts created" });
-    } catch (err) {
-        res.status(500).send(err.message);
-    }
-});
 
 // Start Server
 app.listen(PORT, () => {
