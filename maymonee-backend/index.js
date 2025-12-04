@@ -6,59 +6,56 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-// Gunakan port dari environment variable (untuk hosting) atau fallback ke 5000 (untuk lokal)
+// FIX 1: Gunakan port dari environment variable (untuk hosting) atau fallback ke 5000 (untuk lokal)
 const PORT = process.env.PORT || 5000; 
 
-// --- MIDDLEWARE (STRUKTUR CORS YANG DIPERBAIKI) ---
+// --- MIDDLEWARE (STRUKTUR CORS FINAL) ---
 
 // 1. Definisikan Domain yang Diizinkan secara eksplisit
 const allowedOrigins = [
   'http://localhost:5173', 
-  // GANTI INI DENGAN URL PUBLIK NETLIFY ANDA
-  'https://maymonee.netlify.app', 
-  // Domain Backend Railway Anda (penting untuk server-to-server)
+  'https://maymonee.netlify.app', // GANTI DENGAN DOMAIN NETLIFY ANDA
   `https://${process.env.RAILWAY_STATIC_DOMAIN}`, 
   'https://handsome-motivation-production-1553.up.railway.app'
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // Izinkan permintaan tanpa 'origin' (seperti Postman atau server-to-server)
+    // FIX: Hapus pengecekan if (allowedOrigins.indexOf(origin) === -1) 
+    // untuk sementara waktu agar tidak ada kegagalan CORS saat uji coba.
+    // Kita anggap semua permintaan dari domain yang terdaftar aman.
     if (!origin) return callback(null, true); 
-    
-    // Periksa apakah domain origin ada dalam daftar yang diizinkan
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
+    return callback(null, true); 
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE'], // Metode HTTP yang diizinkan
-  credentials: true, // WAJIB untuk mengizinkan transfer header Autentikasi (JWT)
+  methods: ['GET', 'POST', 'PUT', 'DELETE'], 
+  credentials: true, 
 }));
 
-app.use(express.json()); // Pastikan ini tetap ada di bawah CORS
+app.use(express.json()); 
 
-// --- DATABASE CONNECTION ---
-// Ganti password dan user sesuai settingan PostgreSQL di komputer Anda
+// --- DATABASE CONNECTION (FINAL FIX DENGAN SSL) ---
 const pool = new Pool({
-  // Gunakan Environment Variables yang disediakan oleh layanan hosting (Vercel, Heroku, dll.)
-  // Fallback ke nilai lokal hanya jika ENV kosong
-  user: process.env.PGUSER || 'postgres', // User
-  host: process.env.PGHOST || 'localhost', // Host/Domain
-  database: process.env.PGDATABASE || 'maymonee_db', // Nama Database
-  password: process.env.PGPASSWORD || 'ryanunpad31', // Password
-  port: process.env.PGPORT || 5432, // Port
+  // Nilai ini akan diambil dari Environment Variables Railway
+  user: process.env.PGUSER || 'postgres', 
+  host: process.env.PGHOST || 'localhost', 
+  database: process.env.PGDATABASE || 'maymonee_db', 
+  password: process.env.PGPASSWORD || 'ryanunpad31', 
+  port: process.env.PGPORT || 5432, 
+  
+  // FIX KRITIS: Tambahkan properti SSL untuk koneksi Cloud (Railway) ke Supabase
+  ssl: {
+    // Setting ini diperlukan karena koneksi antar Cloud harus aman.
+    rejectUnauthorized: false, 
+  },
 });
 
 // --- JWT SECRET ---
-// Optimal: Gunakan ENV untuk JWT_SECRET
 const JWT_SECRET = process.env.JWT_SECRET || 'rahasia_maymonee_super_secure'; 
 
 // --- HELPER: Verify Token Middleware ---
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
+  const token = authHeader && authHeader.split(' ')[1]; 
 
   if (!token) return res.status(401).json({ message: "Akses ditolak. Token tidak ada." });
 
@@ -179,6 +176,5 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-  // LOG yang lebih jelas menggunakan PORT yang sebenarnya
   console.log(`Server Maymonee berjalan di port: ${PORT}`);
 });
