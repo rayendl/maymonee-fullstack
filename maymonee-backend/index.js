@@ -33,20 +33,20 @@ app.use(cors({
 
 app.use(express.json()); 
 
-// --- DATABASE CONNECTION (FINAL FIX DENGAN SSL & PENGGUNAAN ENV) ---
+// --- DATABASE CONNECTION (FINAL FIX DENGAN IPv4) ---
 const pool = new Pool({
-  // FIX: Gunakan ENV sebagai prioritas utama. 
-  // Jika ini gagal di Railway, itu karena PGPASSWORD/PGHOST di ENV salah.
-  user: process.env.PGUSER, 
-  host: process.env.PGHOST, 
-  database: process.env.PGDATABASE, 
-  password: process.env.PGPASSWORD, 
-  port: process.env.PGPORT, 
+  // Nilai ini akan diambil dari Environment Variables Railway
+  user: process.env.PGUSER || 'postgres', 
+  host: process.env.PGHOST || 'localhost', 
+  database: process.env.PGDATABASE || 'maymonee_db', 
+  password: process.env.PGPASSWORD || 'ryanunpad31', 
+  port: process.env.PGPORT || 5432, 
   
-  // FIX KRITIS: Properti SSL untuk koneksi Cloud ke Supabase
+  // FIX KRITIS #1: Memaksa Node.js menggunakan koneksi IPv4
+  family: 4, 
+
+  // FIX KRITIS #2: Properti SSL
   ssl: {
-    // Setting ini diperlukan. Kita set ke true karena Supabase WAJIB SSL.
-    // Jika ini gagal, itu 100% masalah kredensial.
     rejectUnauthorized: false, 
   },
 });
