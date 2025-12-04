@@ -179,5 +179,6 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
 
 // Start Server
 app.listen(PORT, () => {
-  console.log(`Server Maymonee berjalan di http://localhost:${PORT}`);
+  // LOG yang lebih jelas menggunakan PORT yang sebenarnya
+  console.log(`Server Maymonee berjalan di port: ${PORT}`);
 });
