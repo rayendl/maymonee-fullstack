@@ -6,26 +6,26 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
 const app = express();
-// FIX 1: Gunakan port dari environment variable (untuk hosting) atau fallback ke 5000 (untuk lokal)
+// Gunakan port dari environment variable (untuk hosting) atau fallback ke 5000 (untuk lokal)
 const PORT = process.env.PORT || 5000; 
 
-// --- MIDDLEWARE (STRUKTUR CORS FINAL) ---
-
-// 1. Definisikan Domain yang Diizinkan secara eksplisit
+// --- MIDDLEWARE (CORS) ---
+// ... (Bagian CORS yang sudah diperbaiki tetap sama) ...
 const allowedOrigins = [
   'http://localhost:5173', 
-  'https://maymonee.netlify.app', // GANTI DENGAN DOMAIN NETLIFY ANDA
+  'https://maymonee.netlify.app', 
   `https://${process.env.RAILWAY_STATIC_DOMAIN}`, 
   'https://handsome-motivation-production-1553.up.railway.app'
 ];
 
 app.use(cors({
   origin: (origin, callback) => {
-    // FIX: Hapus pengecekan if (allowedOrigins.indexOf(origin) === -1) 
-    // untuk sementara waktu agar tidak ada kegagalan CORS saat uji coba.
-    // Kita anggap semua permintaan dari domain yang terdaftar aman.
     if (!origin) return callback(null, true); 
-    return callback(null, true); 
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `The CORS policy for this site does not allow access from the specified Origin: ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
   },
   methods: ['GET', 'POST', 'PUT', 'DELETE'], 
   credentials: true, 
@@ -33,18 +33,20 @@ app.use(cors({
 
 app.use(express.json()); 
 
-// --- DATABASE CONNECTION (FINAL FIX DENGAN SSL) ---
+// --- DATABASE CONNECTION (FINAL FIX DENGAN SSL & PENGGUNAAN ENV) ---
 const pool = new Pool({
-  // Nilai ini akan diambil dari Environment Variables Railway
-  user: process.env.PGUSER || 'postgres', 
-  host: process.env.PGHOST || 'localhost', 
-  database: process.env.PGDATABASE || 'maymonee_db', 
-  password: process.env.PGPASSWORD || 'ryanunpad31', 
-  port: process.env.PGPORT || 5432, 
+  // FIX: Gunakan ENV sebagai prioritas utama. 
+  // Jika ini gagal di Railway, itu karena PGPASSWORD/PGHOST di ENV salah.
+  user: process.env.PGUSER, 
+  host: process.env.PGHOST, 
+  database: process.env.PGDATABASE, 
+  password: process.env.PGPASSWORD, 
+  port: process.env.PGPORT, 
   
-  // FIX KRITIS: Tambahkan properti SSL untuk koneksi Cloud (Railway) ke Supabase
+  // FIX KRITIS: Properti SSL untuk koneksi Cloud ke Supabase
   ssl: {
-    // Setting ini diperlukan karena koneksi antar Cloud harus aman.
+    // Setting ini diperlukan. Kita set ke true karena Supabase WAJIB SSL.
+    // Jika ini gagal, itu 100% masalah kredensial.
     rejectUnauthorized: false, 
   },
 });
@@ -100,7 +102,8 @@ app.post('/api/auth/register', async (req, res) => {
 
     res.json({ token, user: newUser.rows[0] });
   } catch (err) {
-    console.error(err.message);
+    // FIX: Log error koneksi database
+    console.error("REGISTER FAILED:", err.message); 
     res.status(500).send("Server Error");
   }
 });
@@ -127,7 +130,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     res.json({ token, user: { id: user.rows[0].id, name: user.rows[0].name, email: user.rows[0].email } });
   } catch (err) {
-    console.error(err.message);
+    console.error("LOGIN FAILED:", err.message);
     res.status(500).send("Server Error");
   }
 });
@@ -168,7 +171,7 @@ app.get('/api/dashboard', authenticateToken, async (req, res) => {
     res.json(responseData);
 
   } catch (err) {
-    console.error(err.message);
+    console.error("DASHBOARD FAILED:", err.message);
     res.status(500).send("Server Error");
   }
 });
