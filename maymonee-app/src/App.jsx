@@ -60,12 +60,14 @@ import {
 } from 'recharts';
 
 // --- CONFIGURATION ---
-const API_BASE_URL = "http://localhost:5000/api";
+// Gunakan URL Railway Anda untuk deployment sebenarnya.
+const API_BASE_URL = "https://handsome-motivation-production-1553.up.railway.app/api";
 
 axios.defaults.baseURL = API_BASE_URL;
 
-// --- Gemini API Configuration (FIXED: Reset to empty string to avoid compilation error) ---
-const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+// --- Gemini API Configuration (Placeholder Aman) ---
+// Note: Di lingkungan ini, API Key harus diisi manual atau menggunakan teknik ENV yang didukung Canvas.
+const apiKey = ""; 
 
 const callGemini = async (prompt) => {
   if (!apiKey) return "API Key belum diset. Silakan masukkan API Key di dalam kode.";
@@ -134,7 +136,7 @@ const COLORS = ['#6EE7B7', '#34D399', '#60A5FA', '#818CF8', '#FBBF24', '#F472B6'
 const DONUT_COLORS = ['#34D399', '#10B981', '#6EE7B7', '#3B82F6', '#6366F1', '#8B5CF6', '#EC4899', '#F43F5E', '#F59E0B', '#14B8A6', '#06B6D4', '#EAB308'];
 const DAYS_OF_WEEK = [{ id: 0, label: 'Min' }, { id: 1, label: 'Sen' }, { id: 2, label: 'Sel' }, { id: 3, label: 'Rab' }, { id: 4, label: 'Kam' }, { id: 5, label: 'Jum' }, { id: 6, label: 'Sab' }];
 
-// --- SUB COMPONENTS ---
+// --- SUB COMPONENTS (AuthPage, InfoBlock, etc.) ---
 
 const AuthPage = ({ onLogin }) => {
   const [isRegister, setIsRegister] = useState(false);
@@ -168,7 +170,7 @@ const AuthPage = ({ onLogin }) => {
             <DollarSign className="w-8 h-8 text-white" strokeWidth={3} />
           </div>
           <h1 className="text-2xl font-bold text-white mb-1">Welcome to Maymonee.</h1>
-          <p className="text-emerald-50 text-sm">Make Your Money Easy</p>
+          <p className="text-emerald-50 text-sm">No more broke era.</p>
         </div>
         
         <div className="p-8">
@@ -349,10 +351,10 @@ const SpendingView = ({
     
     // Fallback logic check if categories/accounts exist before indexing
     const safeCategoriesExpense = categories.expenses && categories.expenses.length > 0 ? categories.expenses : ['Lainnya'];
-    const safeAccountsList = accounts && accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS;
-
-    const initialCategory = safeCategoriesExpense[0] || 'Lainnya';
-    const initialAccountId = safeAccountsList[0].id; // Guaranteed to exist (id: 99 or real ID)
+    // Filter out the fallback ID 99 if real accounts exist
+    const safeAccountsList = accounts.filter(a => a.id !== 99);
+    // If no real accounts, rely on the DUMMY account ID 99 for initialization only
+    const initialAccountId = safeAccountsList.length > 0 ? safeAccountsList[0].id : DEFAULT_ACCOUNTS[0].id; 
 
 
     // State & Handlers
@@ -371,7 +373,7 @@ const SpendingView = ({
     const [formData, setFormData] = useState({ 
         date: new Date().toISOString().split('T')[0], 
         description: "", 
-        category: initialCategory, 
+        category: safeCategoriesExpense[0] || 'Lainnya', 
         accountId: initialAccountId, 
         amount: "" 
     });
@@ -392,7 +394,7 @@ const SpendingView = ({
         setFormData({ 
             date: new Date().toISOString().split('T')[0], 
             description: "", 
-            category: initialCategory, 
+            category: safeCategoriesExpense[0] || 'Lainnya', 
             accountId: initialAccountId, 
             amount: "" 
         });
@@ -458,10 +460,15 @@ const SpendingView = ({
       const amountVal = parseCurrency(formData.amount);
 
       // GUARD: Prevent transaction input if user hasn't set up real accounts/categories
-      if (propAccounts.length === 0 || propCategories.income.length === 0) {
-          alert("Harap buat minimal satu Akun dan Kategori di tab Setup sebelum mencatat transaksi!");
+      if (safeAccountsList.length === 0) {
+          alert("Harap buat minimal satu Akun di tab Setup sebelum mencatat transaksi!");
           return;
       }
+      if (safeCategoriesExpense.length === 0) {
+          alert("Harap tambahkan minimal satu Kategori Pengeluaran/Pemasukan di tab Setup!");
+          return;
+      }
+
 
       if (isRecurring) {
           const newRule = {
@@ -493,9 +500,32 @@ const SpendingView = ({
              return acc; 
          }));
       } else {
-         const newTx = { id: Date.now(), date: formData.date, description: formData.description, category: formData.category, amount: amountVal, accountId: parseInt(formData.accountId), type: transactionType };
-         setTransactions([...transactions, newTx]);
-         setAccounts(prev => prev.map(acc => { if(acc.id === newTx.accountId) { return { ...acc, balance: transactionType === 'income' ? acc.balance + newTx.amount : acc.balance - newTx.amount }; } return acc; }));
+         // API Integration Logic for new Transaction
+         const newTxData = { 
+            date: formData.date, 
+            description: formData.description, 
+            category: formData.category, 
+            amount: amountVal, 
+            accountId: parseInt(formData.accountId), 
+            type: transactionType 
+         };
+
+         // Simulasikan POST ke API
+         axios.post('/transactions', newTxData)
+            .then(response => {
+                const newTx = response.data; // Asumsi Backend mereturn data transaksi yang baru
+                setTransactions(prev => [...prev, newTx]);
+                // Perbarui Balance Akun di Frontend (Ini harusnya dihandle Backend secara atomik)
+                setAccounts(prev => prev.map(acc => { 
+                    if(acc.id === newTx.account_id) { // NOTE: Gunakan account_id dari respons backend
+                        return { ...acc, balance: newTx.type === 'income' ? acc.balance + newTx.amount : acc.balance - newTx.amount }; 
+                    } 
+                    return acc; 
+                }));
+            })
+            .catch(error => {
+                alert("Gagal menyimpan transaksi ke server: " + (error.response?.data?.message || error.message));
+            });
       }
       handleCloseModal();
     };
@@ -722,7 +752,7 @@ const SpendingView = ({
                                             <div>
                                                 <label className="block text-xs font-bold text-slate-500 mb-2 ml-1">Akun</label>
                                                 <select required value={formData.accountId} onChange={e => setFormData({...formData, accountId: parseInt(e.target.value)})} className="w-full border border-slate-200 rounded-xl p-3 text-sm bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-200 outline-none cursor-pointer">
-                                                    {accounts.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+                                                    {accounts.filter(a => a.id !== 99).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
                                                 </select>
                                             </div>
                                         </div>
@@ -1192,6 +1222,7 @@ const DashboardView = ({ showYearly, setShowYearly, selectedYear, setSelectedYea
 const AssetsView = ({ assets, accounts, setAssets, setAccounts, setTransactions, transactions, currency }) => {
     // FIX: Ensure safe account access
     const safeAccountsList = accounts && accounts.length > 0 ? accounts : DEFAULT_ACCOUNTS;
+    const accountsDisplay = accounts.filter(a => a.id !== 99);
     const initialAccountId = safeAccountsList[0].id;
     const initialTargetId = safeAccountsList.length > 1 ? safeAccountsList[1].id : initialAccountId;
 
@@ -1207,7 +1238,6 @@ const AssetsView = ({ assets, accounts, setAssets, setAccounts, setTransactions,
     const [sellForm, setSellForm] = useState({ qty: "", targetAccountId: initialAccountId });
     const [viewMutation, setViewMutation] = useState(null);
 
-    const accountsDisplay = accounts.filter(a => a.id !== 99); // Accounts excluding fallback
     const totalAssets = assets.reduce((acc, curr) => acc + curr.value, 0);
     const liquidAssets = assets.filter(a => a.liquidity === "Liquid").reduce((acc, curr) => acc + curr.value, 0);
     const nonLiquidAssets = assets.filter(a => a.liquidity === "Non-Liquid").reduce((acc, curr) => acc + curr.value, 0);
@@ -1313,7 +1343,7 @@ const AssetsView = ({ assets, accounts, setAssets, setAccounts, setTransactions,
        <div className="space-y-6 relative animate-fadeIn">
           {transferModalOpen && accountsDisplay.length >= 2 && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4"><div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-sm animate-fadeIn border border-white/60"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2 mb-6"><RefreshCw className="text-emerald-500" /> Transfer Dana</h3><div className="space-y-5"><div><label className="text-xs font-bold text-slate-500 mb-2 ml-1">Dari Akun</label><select className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white transition-colors outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer" value={transferForm.fromId} onChange={(e) => setTransferForm({...transferForm, fromId: e.target.value})}>{accountsDisplay.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({formatCurrency(acc.balance, currency)})</option>)}</select></div><div className="flex justify-center -my-3 relative z-10"><div className="bg-white p-1.5 rounded-full text-emerald-500 border border-slate-100 shadow-sm"><ArrowDownCircle size={24} /></div></div><div><label className="text-xs font-bold text-slate-500 mb-2 ml-1">Ke Akun</label><select className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white transition-colors outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer" value={transferForm.toId} onChange={(e) => setTransferForm({...transferForm, toId: e.target.value})}>{accountsDisplay.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({formatCurrency(acc.balance, currency)})</option>)}</select></div><div><label className="text-xs font-bold text-slate-500 mb-2 ml-1">Nominal</label><input type="number" placeholder="0" className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white transition-colors outline-none focus:ring-2 focus:ring-emerald-200 font-bold text-slate-700" value={transferForm.amount} onChange={(e) => setTransferForm({...transferForm, amount: e.target.value})}/></div><div className="flex gap-3 pt-2"><button onClick={handleTransfer} className="flex-1 bg-emerald-500 text-white py-3 rounded-xl font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-transform active:scale-95">Transfer</button><button onClick={() => setTransferModalOpen(false)} className="px-6 py-3 border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition-colors">Batal</button></div></div></div></div>)}
           {buyModalOpen && accountsDisplay.length > 0 && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4"><div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md animate-fadeIn border border-white/60"><div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ShoppingCart className="text-emerald-500" /> Beli Investasi Baru</h3><button onClick={() => setBuyModalOpen(false)} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 transition-colors shadow-sm"><X size={20} /></button></div><div className="space-y-4"><input className="w-full border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Nama Aset (Misal: BBCA, Emas)" value={buyForm.name} onChange={e => setBuyForm({...buyForm, name: e.target.value})} /><div className="flex gap-4"><select className="w-1/2 border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer" value={buyForm.category} onChange={e => setBuyForm({...buyForm, category: e.target.value})}>{ASSET_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select><select className="w-1/2 border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer" value={buyForm.liquidity} onChange={e => setBuyForm({...buyForm, liquidity: e.target.value})}>{LIQUIDITY_TYPES.map(t=><option key={t} value={t}>{t}</option>)}</select></div><div className="flex gap-4"><input type="number" className="w-1/2 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Harga/Unit" value={buyForm.price} onChange={e => setBuyForm({...buyForm, price: e.target.value})} /><div className="w-1/2 flex gap-2"><input type="number" className="w-2/3 border border-slate-200 rounded-xl p-3.5 text-sm outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Jml" value={buyForm.qty} onChange={e => setBuyForm({...buyForm, qty: e.target.value})} /><input className="w-1/3 border border-slate-200 rounded-xl p-3.5 text-sm text-center outline-none focus:ring-2 focus:ring-emerald-200" placeholder="Unit" value={buyForm.unit} onChange={e => setBuyForm({...buyForm, unit: e.target.value})} /></div></div><div><label className="text-xs font-bold text-slate-500 mb-2 ml-1">Bayar Pakai Akun</label><select className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-slate-50 focus:bg-white outline-none focus:ring-2 focus:ring-emerald-200 cursor-pointer" value={buyForm.accountId} onChange={e => setBuyForm({...buyForm, accountId: e.target.value})}>{accountsDisplay.map(acc => <option key={acc.id} value={acc.id}>{acc.name} ({formatCurrency(acc.balance, currency)})</option>)}</select></div><div className="bg-emerald-50 p-4 rounded-xl text-right"><span className="text-xs text-emerald-600 block font-bold uppercase mb-1">Total Pembelian</span><span className="text-2xl font-bold text-emerald-700 tracking-tight">{formatCurrency((parseFloat(buyForm.price)||0) * (parseFloat(buyForm.qty)||0), currency)}</span></div><button onClick={handleBuyAsset} className="w-full bg-emerald-500 text-white py-3.5 rounded-xl font-bold hover:bg-emerald-600 shadow-lg shadow-emerald-200 transition-transform active:scale-95">Konfirmasi Pembelian</button></div></div></div>)}
-          {sellModalOpen && selectedAsset && accountsDisplay.length > 0 && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4"><div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md animate-fadeIn border border-white/60"><div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Coins className="text-amber-500" /> Jual Aset / Take Profit</h3><button onClick={() => setSellModalOpen(false)} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 transition-colors shadow-sm"><X size={20} /></button></div><div className="space-y-5"><div className="bg-slate-50 p-5 rounded-2xl text-sm text-slate-600 border border-slate-200"><p className="font-bold text-slate-800 text-lg mb-2">{selectedAsset.name}</p><p className="mb-1">Harga Pasar: <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedAsset.currentPrice, currency)} / {selectedAsset.unit}</span></p><p>Dimiliki: <span className="font-mono font-bold text-slate-800">{selectedAsset.quantity} {selectedAsset.unit}</span></p></div><div><label className="block text-xs font-bold text-slate-500 mb-2 ml-1">Jumlah Dijual</label><input type="number" autoFocus className="w-full border border-slate-200 rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-700" value={sellForm.qty} onChange={(e) => setSellForm({...sellForm, qty: e.target.value})} /></div><div className="p-4 bg-amber-50 rounded-xl text-right"><span className="text-xs text-amber-700 block font-bold uppercase mb-1">Estimasi Cuan (Masuk Rekening)</span><span className="text-2xl font-bold text-amber-700 tracking-tight">{formatCurrency((parseFloat(sellForm.qty) || 0) * selectedAsset.currentPrice, currency)}</span></div><div><label className="block text-xs font-bold text-slate-500 mb-2 ml-1">Masuk ke Akun</label><select className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-white focus:ring-2 focus:ring-amber-200 outline-none cursor-pointer" value={sellForm.targetAccountId} onChange={(e) => setSellForm({...sellForm, targetAccountId: e.target.value})}>{accountsDisplay.map(acc => <option key={acc.id} value={acc.id}>{acc.name}</option>)}</select></div><button onClick={handleSellAsset} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-amber-200 transition-transform active:scale-95">Konfirmasi Penjualan</button></div></div></div>)}
+          {sellModalOpen && selectedAsset && accountsDisplay.length > 0 && (<div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md p-4"><div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md animate-fadeIn border border-white/60"><div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><Coins className="text-amber-500" /> Jual Aset / Take Profit</h3><button onClick={() => setSellModalOpen(false)} className="bg-white p-2 rounded-full text-slate-400 hover:text-slate-600 transition-colors shadow-sm"><X size={20} /></button></div><div className="space-y-5"><div className="bg-slate-50 p-5 rounded-2xl text-sm text-slate-600 border border-slate-200"><p className="font-bold text-slate-800 text-lg mb-2">{selectedAsset.name}</p><p className="mb-1">Harga Pasar: <span className="font-mono font-bold text-slate-800">{formatCurrency(selectedAsset.currentPrice, currency)} / {selectedAsset.unit}</span></p><p>Dimiliki: <span className="font-mono font-bold text-slate-800">{selectedAsset.quantity} {selectedAsset.unit}</span></p></div><div><label className="block text-xs font-bold text-slate-500 mb-2 ml-1">Jumlah Dijual</label><input type="number" autoFocus className="w-full border border-slate-200 rounded-xl p-3.5 text-sm focus:ring-2 focus:ring-amber-200 outline-none font-bold text-slate-700" value={sellForm.qty} onChange={(e) => setSellForm({...sellForm, qty: e.target.value})} /></div><div className="p-4 bg-amber-50 rounded-xl text-right"><span className="text-xs text-amber-700 block font-bold uppercase mb-1">Estimasi Cuan (Masuk Rekening)</span><span className="text-2xl font-bold text-amber-700 tracking-tight">{formatCurrency((parseFloat(sellForm.qty) || 0) * selectedAsset.currentPrice, currency)}</span></div><div><label className="block text-xs font-bold text-slate-500 mb-2 ml-1">Masuk ke Akun</label><select className="w-full border border-slate-200 rounded-xl p-3.5 text-sm bg-white focus:ring-2 focus:ring-amber-200 outline-none cursor-pointer" value={sellForm.targetAccountId} onChange={(e) => setSellForm({...sellForm, targetAccountId: e.target.value})}>{accountsDisplay.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div><button onClick={handleSellAsset} className="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3.5 rounded-xl shadow-lg shadow-amber-200 transition-transform active:scale-95">Konfirmasi Penjualan</button></div></div></div>)}
 
           {/* Mutation Detail Modal */}
           {viewMutation && (
@@ -1504,7 +1534,7 @@ const SetupView = ({ categories, setCategories, accounts, setAccounts, currency,
      const removeCategory = (type, name) => { setCategories(prev => ({ ...prev, [type]: prev[type].filter(c => c !== name) })); };
 
      const renderCategorySection = (title, type, colorClass, items) => (
-        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-6"><h3 className={`font-bold text-lg mb-6 ${colorClass} border-b pb-3`}>{title}</h3><div className="flex flex-wrap gap-3 mb-6">{items.map(cat => (<span key={cat} className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-sm text-slate-700 font-bold flex items-center gap-2 group hover:bg-slate-100 transition-colors">{cat}<button onClick={() => removeCategory(type, cat)} className="text-slate-400 hover:text-rose-500 bg-slate-200 rounded-full p-0.5 hover:bg-rose-100 transition-colors"><X size={14} /></button></span>))}</div>{addingCategoryType === type ? (<div className="flex gap-3 items-center animate-fadeIn"><input autoFocus type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Nama kategori..." className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-300 w-full" onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()} /><button onClick={handleAddCategory} className="bg-emerald-500 text-white p-2.5 rounded-xl hover:bg-emerald-600 transition-colors"><Check size={18} /></button><button onClick={() => { setAddingCategoryType(null); setNewCategoryName(""); }} className="bg-slate-200 text-slate-600 p-2.5 rounded-xl hover:bg-slate-300 transition-colors"><X size={18} /></button></div>) : (<button onClick={() => setAddingCategoryType(type)} className={`bg-slate-50 border-2 border-dashed border-slate-300 px-5 py-3 rounded-xl text-sm text-slate-500 font-bold hover:text-slate-700 hover:border-slate-400 flex items-center gap-2 transition-all w-full justify-center group`}><Plus size={18} className="group-hover:scale-110 transition-transform"/> Tambah Kategori</button>)}</div>
+        <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 mb-6"><h3 className={`font-bold text-lg mb-6 ${colorClass} border-b pb-3`}>{title}</h3><div className="flex flex-wrap gap-3 mb-6">{items.map(cat => (<span key={cat} className="bg-slate-50 border border-slate-100 px-4 py-2 rounded-full text-sm text-slate-700 font-bold flex items-center gap-2 group hover:bg-slate-100 transition-colors">{cat}<button onClick={() => removeCategory(type, cat)} className="text-slate-400 hover:text-rose-500 bg-slate-200 rounded-full p-0.5 hover:bg-rose-100 transition-colors"><X size={14} /></button></span>))}</div>{addingCategoryType === type ? (<div className="flex gap-3 items-center animate-fadeIn"><input autoFocus type="text" value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} placeholder="Nama kategori..." className="border border-slate-300 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 focus:ring-emerald-300 w-full" onKeyDown={(e) => e.key === 'Enter' && handleAddCategory()} /><button onClick={handleAddCategory} className="bg-emerald-500 text-white p-2.5 rounded-xl hover:bg-emerald-600 transition-colors"><Check size={18} /></button><button onClick={() => { setAddingCategoryType(null); setNewCategoryName(""); }} className="bg-slate-200 text-slate-600 p-2.5 rounded-xl hover:bg-slate-300 transition-colors"><X size={18} /></button></div>) : (<button onClick={() => setAddingCategoryType(type)} className={`bg-slate-50 border-2 border-dashed border-slate-300 px-5 py-3 rounded-xl text-sm text-slate-500 font-bold hover:text-slate-700 hover:border-border-emerald-400 flex items-center gap-2 transition-all w-full justify-center group`}><Plus size={18} className="group-hover:scale-110 transition-transform"/> Tambah Kategori</button>)}</div>
      );
 
      return (
